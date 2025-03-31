@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tamil Nadu 3D Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+        }
+        #mapCanvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 40px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #555;
+            z-index: 11;
+        }
+        .temple-label {
+            position: absolute;
+            color: white;
+            font-size: 0.8em;
+            padding: 3px 6px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 4px;
+            pointer-events: auto;
+            z-index: 10;
+            white-space: nowrap;
+            cursor: pointer;
+            border: 1px solid white;
+        }
+        .temple-label:hover {
+            background-color: rgba(255, 255, 255, 0.9);
+            color: black;
+        }
+        #screenshotButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 1em;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 11;
+        }
+        #screenshotButton:hover {
+            background-color: #367c39;
+        }
+        #message {
+            position: absolute;
+            top: 10px;
+            left: 150px;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 11;
+            font-size: 0.9em;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="mapCanvas"></canvas>
+    <button id="screenshotButton">Download Screenshot</button>
+    <div id="message"></div>
+    <div id="instructions">
+        Use mouse to rotate and zoom the map. Click on the temple labels to visit them.
+    </div>
+    <div id="templeLabels"></div>
+    <script>
+       const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('mapCanvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xADD8E6);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 10, 5);
+        scene.add(directionalLight);
+
+        // Dummy data for Tamil Nadu
+        const tamilNaduShape = [
+            { x: 0, y: 0, z: 0 },
+            { x: 2, y: 0, z: 0.5 },
+            { x: 4, y: 1, z: 0 },
+            { x: 5, y: 3, z: 0.2 },
+            { x: 4, y: 5, z: 0.5 },
+            { x: 3, y: 5, z: 0 },
+            { x: 1, y: 4, z: -0.2 },
+            { x: 0, y: 2, z: -0.5 },
+            { x: -1, y: 1, z: 0 }
+        ];
+
+        // Dummy data for Western Ghats
+        const westernGhatsShape = [
+            { x: -1, y: 1, z: 0.2 },
+            { x: -1.2, y: 2, z: 0.8 },
+            { x: -1.5, y: 3, z: 1.5 },
+            { x: -1.8, y: 4, z: 2.0 },
+            { x: -2, y: 5, z: 2.5 },
+            { x: -2.2, y: 4.5, z: 2.2 },
+            { x: -2.4, y: 4, z: 1.8 },
+            { x: -2.5, y: 3.5, z: 1.5 },
+            { x: -2.6, y: 3, z: 1.2 },
+            { x: -2.7, y: 2.5, z: 1 },
+            { x: -2.8, y: 2, z: 0.8 },
+            { x: -2.9, y: 1.5, z: 0.5 },
+            { x: -3, y: 1, z: 0.2 }
+        ];
+
+        // Dummy data for rivers
+        const kaveriRiverPoints = [
+            { x: -0.5, y: 2.5, z: 0.1 },
+            { x: 0, y: 3, z: 0.3 },
+            { x: 0.5, y: 3.5, z: 0.2 },
+            { x: 1, y: 3, z: 0.4 },
+            { x: 1.5, y: 2.5, z: 0.3 },
+            { x: 2, y: 2, z: 0.1 },
+            { x: 2.5, y: 1.5, z: 0.2 },
+            { x: 3, y: 1, z: 0 }
+        ];
+
+        const pambarRiverPoints = [
+            {x: -0.8, y: 1.8, z: 0.1},
+            {x: -0.5, y: 2.2, z: 0.2},
+            {x: -0.2, y: 2.5, z: 0.15},
+            {x: 0.1, y: 2.7, z: 0.25},
+            {x: 0.4, y: 2.9, z: 0.2}
+        ];
+
+        const vaigaiRiverPoints = [
+            {x: 1.2, y: 0.5, z: 0.1},
+            {x: 1.5, y: 0.8, z: 0.3},
+            {x: 1.8, y: 1.2, z: 0.2},
+            {x: 2.1, y: 1.5, z: 0.4},
+            {x: 2.4, y: 1.8, z: 0.3}
+        ];
+
+        // Create geometry from the Tamil Nadu shape
+        const tnPoints = tamilNaduShape.map(p => new THREE.Vector3(p.x, p.y, p.z));
+        const tnGeometry = new THREE.BufferGeometry().setFromPoints(tnPoints);
+        const tnMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22, flatShading: true });
+        const tamilNaduMesh = new THREE.Mesh(tnGeometry, tnMaterial);
+        tamilNaduMesh.rotation.x = -Math.PI / 2;
+        scene.add(tamilNaduMesh);
+
+        // Create geometry for Western Ghats
+        const wgPoints = westernGhatsShape.map(p => new THREE.Vector3(p.x, p.y, p.z));
+        const wgGeometry = new THREE.BufferGeometry().setFromPoints(wgPoints);
+        const wgMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513, flatShading: true });
+        const westernGhatsMesh = new THREE.Mesh(wgGeometry, wgMaterial);
+        westernGhatsMesh.rotation.x = -Math.PI / 2;
+        scene.add(westernGhatsMesh);
+
+        // Function to create river geometry
+        function createRiverGeometry(points, color = 0x0000FF) {
+            const riverPoints = points.map(p => new THREE.Vector3(p.x, p.y, p.z));
+            const riverGeometry = new THREE.BufferGeometry().setFromPoints(riverPoints);
+            const riverMaterial = new THREE.LineBasicMaterial({
+                color: color,
+                linewidth: 2
+            });
+            return new THREE.Line(riverGeometry, riverMaterial);
+        }
+
+        // Create river meshes
+        const kaveriRiver = createRiverGeometry(kaveriRiverPoints, 0x0000FF);
+        scene.add(kaveriRiver);
+
+        const pambarRiver = createRiverGeometry(pambarRiverPoints, 0x00FFFF);
+        scene.add(pambarRiver);
+
+        const vaigaiRiver = createRiverGeometry(vaigaiRiverPoints, 0x008080);
+        scene.add(vaigaiRiver);
+
+        // Arupadai Veedu Temple Data with coordinates
+        const arupadaiVeeduTemples = [
+            { name: "Thiruparankundram Murugan Temple", x: 2.5, y: 1.8, z: 0.8, url: "https://en.wikipedia.org/wiki/Thiruparankundram_Murugan_Temple" },
+            { name: "Thiruchendur Murugan Temple", x: 4.5, y: 0.5, z: 0.5, url: "https://en.wikipedia.org/wiki/Thiruchendur_Murugan_Temple" },
+            { name: "Palani Murugan Temple", x: 1.8, y: 3.2, z: 1.2, url: "https://en.wikipedia.org/wiki/Palani_Murugan_Temple" },
+            { name: "Swamimalai Murugan Temple", x: 0.8, y: 2.8, z: 0.7, url: "https://en.wikipedia.org/wiki/Swamimalai_Murugan_Temple" },
+            { name: "Thiruthani Murugan Temple", x: -0.2, y: 4.2, z: 1.0, url: "https://en.wikipedia.org/wiki/Thiruthani_Murugan_Temple" },
+            { name: "Pazhamudircholai Murugan Temple", x: 2.2, y: 2.2, z: 0.6, url: "https://en.wikipedia.org/wiki/Pazhamudircholai" }
+        ];
+
+        const templeLabelsDiv = document.getElementById('templeLabels');
+
+        // Function to add temple labels
+        function addTempleLabels() {
+            arupadaiVeeduTemples.forEach(temple => {
+                const label = document.createElement('a');
+                label.href = temple.url;
+                label.target = "_blank";
+                label.classList.add('temple-label');
+                label.textContent = temple.name;
+                label.style.left = `${(window.innerWidth / 2) + (temple.x * 100)}px`;
+                label.style.top = `${(window.innerHeight / 2) - (temple.y * 100)}px`;
+                templeLabelsDiv.appendChild(label);
+            });
+        }
+        addTempleLabels();
+
+        // Camera position
+        camera.position.set(2, 5, 7);
+        camera.lookAt(scene.position);
+
+        // Add basic interactivity
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let rotationSpeed = 0.01;
+        let zoomSpeed = 0.05;
+
+        const handleMouseDown = (event) => {
+            isDragging = true;
+            previousMousePosition = { x: event.clientX, y: event.clientY };
+        };
+
+        const handleMouseUp = () => {
+            isDragging = false;
+        };
+
+        const handleMouseMove = (event) => {
+            if (isDragging) {
+                const deltaX = event.clientX - previousMousePosition.x;
+                const deltaY = event.clientY - previousMousePosition.y;
+
+                tamilNaduMesh.rotation.y += deltaX * rotationSpeed;
+                tamilNaduMesh.rotation.x += deltaY * rotationSpeed;
+                westernGhatsMesh.rotation.y += deltaX * rotationSpeed;
+                westernGhatsMesh.rotation.x += deltaY * rotationSpeed;
+
+                previousMousePosition = { x: event.clientX, y: event.clientY };
+            }
+        };
+
+        const handleMouseWheel = (event) => {
+            event.preventDefault();
+            if (event.deltaY < 0) {
+                camera.position.z -= zoomSpeed;
+            } else if (event.deltaY > 0) {
+                camera.position.z += zoomSpeed;
+            }
+            camera.lookAt(scene.position);
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('wheel', handleMouseWheel);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            const templeLabels = document.querySelectorAll('.temple-label');
+            templeLabels.forEach((label, index) => {
+                const temple = arupadaiVeeduTemples[index];
+                label.style.left = `${(window.innerWidth / 2) + (temple.x * 100)}px`;
+                label.style.top = `${(window.innerHeight / 2) - (temple.y * 100)}px`;
+            });
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        const screenshotButton = document.getElementById('screenshotButton');
+        const messageDiv = document.getElementById('message');
+
+        screenshotButton.addEventListener('click', () => {
+            try {
+                const dataURL = renderer.domElement.toDataURL('image/png');
+                const a = document.createElement('a');
+                a.href = dataURL;
+                a.download = 'tamilnadu_3d_map.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showMessage('Screenshot downloaded successfully!');
+            } catch (error) {
+                console.error('Error capturing screenshot:', error);
+                showMessage('Failed to download screenshot. Please try again.');
+            }
+        });
+
+        function showMessage(text) {
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
